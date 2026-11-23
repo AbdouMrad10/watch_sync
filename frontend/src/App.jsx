@@ -1,17 +1,16 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { useSocket } from './hooks/useSocket.js';
+import { useRoom } from './hooks/useRoom.js';
+import HomePage from './pages/HomePage.jsx';
+import RoomPage from './pages/RoomPage.jsx';
+import ErrorToast from './components/ErrorToast.jsx';
 
-function App() {
-  const [count, setCount] = useState(0)
-
+export default function App() {
+  const { connected } = useSocket();
+  const rm = useRoom();
   return (
     <>
-      <h1>TEST FRONTEND</h1>
+      {rm.room ? <RoomPage rm={rm} connected={connected} /> : <HomePage rm={rm} connected={connected} />}
+      <ErrorToast toasts={rm.toasts} onDismiss={rm.dismissToast} />
     </>
-  )
+  );
 }
-
-export default App
