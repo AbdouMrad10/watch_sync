@@ -1,4 +1,5 @@
 const roomManager = require('../rooms/RoomManager');
+const { registerChatHandlers } = require('./chatHandlers');
 
 module.exports = function registerSocketHandlers(io, socket) {
   // Quelqu'un clique sur "Créer un salon"
@@ -85,4 +86,6 @@ module.exports = function registerSocketHandlers(io, socket) {
     const room = roomManager.removeParticipant(roomId, socket.id);
     if (room) io.to(roomId).emit('participants-update', room.participants);
   });
+
+  registerChatHandlers(io, socket);
 };
