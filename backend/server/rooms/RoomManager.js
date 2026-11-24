@@ -31,17 +31,27 @@ class RoomManager {
 
   // Trouver un salon par code
   getRoomByCode(code) {
+    if (typeof code !== 'string') return null;
+    const wanted = code.trim().toUpperCase();
     for (const room of this.rooms.values()) {
-      if (room.code === code) {
+      if (room.code === wanted) {
         return room;
       }
     }
     return null;
   }
-
   // Trouver un salon par ID
   getRoomById(roomId) {
     return this.rooms.get(roomId) || null;
+  }
+
+  isPseudoTaken(roomId, pseudo, socketId) {
+    const room = this.getRoomById(roomId);
+    if (!room) return false;
+    const wanted = pseudo.trim().toLowerCase();
+    return room.participants.some(
+      p => p.idSocket !== socketId && p.pseudo.toLowerCase() === wanted
+    );
   }
 
   // Ajouter un participant

@@ -6,14 +6,19 @@ module.exports = function registerSocketHandlers(io, socket) {
   // Création d'un salon
   socket.on('create-room', ({ username }, callback) => {
     const room = roomManager.createRoom(username);
-    callback?.({ roomId: room.id });
+    callback?.({ roomId: room.id, code: room.code });
   });
 
-  // Rejoindre un salon
-  socket.on('join-room', ({ roomId, username }, callback) => {
-    const room = roomManager.getRoomById(roomId);
-    if (!room) return callback?.({ ok: false, error: 'Salon introuvable' });
+   // Rejoindre un salon (F2) : par code, avec contrôle du pseudo  <-- MODIFIÉ
+  socket.on('join-room', ({ code, username }, callback) => {
+    const room = roomManager.getRoomByCode(code);
+    if (!room) return callback?.({ ok: false, error: 'Code invalide' });
 
+    if (roomManager.isPseudoTaken(room.id, username, socket.id)) {
+      return callback?.({ ok: false, error: 'Pseudo déjà pris' });
+    }
+
+    const roomId = room.id;
     socket.join(roomId);
     socket.data.roomId = roomId;
     roomManager.addParticipant(roomId, {
@@ -21,19 +26,72 @@ module.exports = function registerSocketHandlers(io, socket) {
       pseudo: username,
     });
 
-    io.to(roomId).emit('participants-update', room.participants);
+        io.to(roomId).emit('participants-update', room.participants);
 
-    socket.emit('video-state', {
+    // On calcule la position actuelle si la vidéo est en lecture,
+    // pour que le nouvel arrivant se resynchronise correctement (F7)
+    const elapsedSeconds = room.isPlaying
+      ? (Date.now() - room.lastUpdate) / 1000
+      : 0;
+
+    callback?.({
+        ok: true,
+        roomId,
+        videoState: {
+        videoId: room.currentVideoId,
+        currentTime: room.currentTime + elapsedSeconds,
+        isPlaying: room.isPlaying,
+      },
+    });
+  });
+    // --- Événements vidéo (module synchronisation) ---
+
+  socket.on('video-load', ({ roomId, videoId }) => {
+    const room = roomManager.updateVideoState(roomId, {
+      videoId,
+      currentTime: 0,
+      isPlaying: false,
+    });
+    if (!room) return;
+    io.to(roomId).emit('video-state-update', {
       videoId: room.currentVideoId,
-      time: room.currentTime,
+      currentTime: room.currentTime,
       isPlaying: room.isPlaying,
     });
-
-    callback?.({ ok: true });
   });
 
-  // Quitter un salon
-  socket.on('leave-room', () => {
+  socket.on('video-play', ({ roomId, currentTime }) => {
+    const room = roomManager.updateVideoState(roomId, { currentTime, isPlaying: true });
+    if (!room) return;
+    io.to(roomId).emit('video-state-update', {
+      videoId: room.currentVideoId,
+      currentTime: room.currentTime,
+      isPlaying: true,
+    });
+  });
+
+  socket.on('video-pause', ({ roomId, currentTime }) => {
+    const room = roomManager.updateVideoState(roomId, { currentTime, isPlaying: false });
+    if (!room) return;
+    io.to(roomId).emit('video-state-update', {
+      videoId: room.currentVideoId,
+      currentTime: room.currentTime,
+      isPlaying: false,
+    });
+  });
+
+  socket.on('video-seek', ({ roomId, currentTime }) => {
+    const room = roomManager.updateVideoState(roomId, { currentTime });
+    if (!room) return;
+    io.to(roomId).emit('video-state-update', {
+      videoId: room.currentVideoId,
+      currentTime: room.currentTime,
+      isPlaying: room.isPlaying,
+    });
+  });
+  // Quelqu'un quitte
+  socket.on('disconnect', () => {
+
     const roomId = socket.data.roomId;
     if (!roomId) return;
 
@@ -44,47 +102,9 @@ module.exports = function registerSocketHandlers(io, socket) {
     if (room) io.to(roomId).emit('participants-update', room.participants);
   });
 
-  // Événements vidéo
-  ['video-load', 'video-play', 'video-pause', 'video-seek'].forEach((eventName) => {
-    socket.on(eventName, (data) => {
-      const roomId = socket.data.roomId;
-      if (!roomId) return;
 
-      if (eventName === 'video-load') {
-        roomManager.updateVideoState(roomId, {
-          videoId: data.videoId,
-          currentTime: 0,
-          isPlaying: false,
-        });
-      } else if (eventName === 'video-play') {
-        roomManager.updateVideoState(roomId, {
-          currentTime: data.time,
-          isPlaying: true,
-        });
-      } else if (eventName === 'video-pause') {
-        roomManager.updateVideoState(roomId, {
-          currentTime: data.time,
-          isPlaying: false,
-        });
-      } else if (eventName === 'video-seek') {
-        roomManager.updateVideoState(roomId, {
-          currentTime: data.time,
-        });
-      }
 
-      socket.to(roomId).emit(eventName, data);
-    });
-  });
 
-  // Déconnexion
-  socket.on('disconnect', () => {
-    const roomId = socket.data.roomId;
-    if (!roomId) return;
-
-    const room = roomManager.removeParticipant(roomId, socket.id);
-    if (room) io.to(roomId).emit('participants-update', room.participants);
-  });
-
-  // Gestion du chat
   registerChatHandlers(io, socket);
 };
+

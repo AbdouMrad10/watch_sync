@@ -2,6 +2,7 @@ import { useState } from 'react'
 import heroImg from './assets/hero.png'
 import reactLogo from './assets/react.svg'
 import viteLogo from './assets/vite.svg'
+import YouTubePlayer from './components/YouTubePlayer';
 import './App.css'
 
 function App() {
@@ -9,7 +10,11 @@ function App() {
 
   return (
     <>
-      <h1>TEST FRONTEND</h1>
+  
+      <div>
+      <h1>Watch Sync</h1>
+      <YouTubePlayer />
+    </div>
     </>
   )
 }
